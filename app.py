@@ -5,7 +5,6 @@ import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import streamlit as st
 import yfinance as yf
-from matplotlib import pyplot as plt
 from plotly.subplots import make_subplots
 from statsmodels.tsa.regime_switching.markov_autoregression import MarkovAutoregression
 
