@@ -136,18 +136,6 @@ if st.button("Run Analysis"):
                 join_df_change[selected_ins].kurtosis(),
                 excess_returns.kurtosis(),
             ]
-            stat_table.loc["Appraisal Ratio"] = [
-                np.nan,
-                np.nan,
-                excess_returns.mean() / excess_returns.abs().mean(),
-            ]
-            stat_table.loc["Batting Average"] = [
-                (join_df_change[selected_bench] > 0).sum()
-                / join_df_change[selected_bench].count(),
-                (join_df_change[selected_ins] > 0).sum()
-                / join_df_change[selected_ins].count(),
-                (excess_returns > 0).sum() / excess_returns.count(),
-            ]
             stat_table.loc["Upside Potential Ratio"] = [
                 join_df_change[selected_bench][
                     join_df_change[selected_bench] > 0
