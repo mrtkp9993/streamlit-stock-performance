@@ -5,7 +5,9 @@ import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import streamlit as st
 import yfinance as yf
+from matplotlib import pyplot as plt
 from plotly.subplots import make_subplots
+from statsmodels.tsa.regime_switching.markov_autoregression import MarkovAutoregression
 
 from inst_list import inst_list
 
@@ -80,6 +82,7 @@ with col3:
 
 
 error = 0
+error_str = ""
 if st.button("Run Analysis"):
     with st.spinner("Analyzing..."):
         try:
@@ -89,11 +92,13 @@ if st.button("Run Analysis"):
             join_df.columns = [selected_ins, selected_bench]
             join_df = join_df.dropna()
             join_df_change = join_df.pct_change()
+            join_df_change = join_df_change.dropna()
             excess_returns = (
                 join_df_change[selected_ins] - join_df_change[selected_bench]
             )
             excess_returns.name = "Excess Returns"
 
+            # Return Statistics
             stat_table = pd.DataFrame(
                 columns=["Benchmark", "Instrument", "Excess Returns"]
             )
@@ -112,7 +117,7 @@ if st.button("Run Analysis"):
                 np.nan,
                 excess_returns.mean() / excess_returns.std(),
             ]
-            stat_table.loc["Value at Risk"] = [
+            stat_table.loc["Value-at-Risk"] = [
                 join_df_change[selected_bench].quantile(0.05),
                 join_df_change[selected_ins].quantile(0.05),
                 excess_returns.quantile(0.05),
@@ -166,15 +171,94 @@ if st.button("Run Analysis"):
                 excess_returns[excess_returns > 0].sum()
                 / excess_returns[excess_returns < 0].sum(),
             ]
+
+            # HMM Regime Switching
+            model = MarkovAutoregression(
+                endog=join_df_change[selected_ins],
+                k_regimes=3,
+                order=1,
+                switching_variance=True,
+                trend="n",
+            )
+            res = model.fit()
+            regimes = res.smoothed_marginal_probabilities.idxmax(axis=1)
+            # Regime statistics
+            regstats = pd.DataFrame(
+                columns=[
+                    "Regime 1",
+                    "Regime 2",
+                    "Regime 3",
+                ]
+            )
+
+            regstats.loc["Mean"] = [
+                join_df_change[selected_ins][1:][regimes == 0].mean(),
+                join_df_change[selected_ins][1:][regimes == 1].mean(),
+                join_df_change[selected_ins][1:][regimes == 2].mean(),
+            ]
+            regstats.loc["Standart Deviation"] = [
+                join_df_change[selected_ins][1:][regimes == 0].std(),
+                join_df_change[selected_ins][1:][regimes == 1].std(),
+                join_df_change[selected_ins][1:][regimes == 2].std(),
+            ]
+            regstats.loc["Gain-Loss Ratio"] = [
+                join_df_change[selected_ins][1:][regimes == 0][
+                    join_df_change[selected_ins][1:][regimes == 0] > 0
+                ].sum()
+                / join_df_change[selected_ins][1:][regimes == 0][
+                    join_df_change[selected_ins][1:][regimes == 0] < 0
+                ].sum(),
+                join_df_change[selected_ins][1:][regimes == 1][
+                    join_df_change[selected_ins][1:][regimes == 1] > 0
+                ].sum()
+                / join_df_change[selected_ins][1:][regimes == 1][
+                    join_df_change[selected_ins][1:][regimes == 1] < 0
+                ].sum(),
+                join_df_change[selected_ins][1:][regimes == 2][
+                    join_df_change[selected_ins][1:][regimes == 2] > 0
+                ].sum()
+                / join_df_change[selected_ins][1:][regimes == 2][
+                    join_df_change[selected_ins][1:][regimes == 2] < 0
+                ].sum(),
+            ]
+            regstats.loc["Upside Potential Ratio"] = [
+                join_df_change[selected_ins][1:][regimes == 0][
+                    join_df_change[selected_ins][1:][regimes == 0] > 0
+                ].mean()
+                / join_df_change[selected_ins][1:][regimes == 0][
+                    join_df_change[selected_ins][1:][regimes == 0] < 0
+                ].mean(),
+                join_df_change[selected_ins][1:][regimes == 1][
+                    join_df_change[selected_ins][1:][regimes == 1] > 0
+                ].mean()
+                / join_df_change[selected_ins][1:][regimes == 1][
+                    join_df_change[selected_ins][1:][regimes == 1] < 0
+                ].mean(),
+                join_df_change[selected_ins][1:][regimes == 2][
+                    join_df_change[selected_ins][1:][regimes == 2] > 0
+                ].mean()
+                / join_df_change[selected_ins][1:][regimes == 2][
+                    join_df_change[selected_ins][1:][regimes == 2] < 0
+                ].mean(),
+            ]
+            regstats.loc["Value-at-Risk"] = [
+                join_df_change[selected_ins][1:][regimes == 0].quantile(0.05),
+                join_df_change[selected_ins][1:][regimes == 1].quantile(0.05),
+                join_df_change[selected_ins][1:][regimes == 2].quantile(0.05),
+            ]
+
             error = 0
-        except:
+        except Exception as e:
             error = 1
+            error_str = str(e)
 
     if error:
         st.error("Failed to analyze.")
+        if len(error_str) > 0:
+            st.error(error_str)
     else:
         st.success("Analysis completed.")
-        with st.expander("Results"):
+        with st.expander("Return Statistics"):
             col4, col5 = st.columns(2)
             with col4:
                 fig = make_subplots(specs=[[{"secondary_y": True}]])
@@ -228,3 +312,33 @@ if st.button("Run Analysis"):
             with col7:
                 st.write("Return Statistics")
                 st.dataframe(stat_table, use_container_width=True)
+
+        with st.expander("Regime Switching"):
+            col8, col9 = st.columns(2)
+            with col8:
+                fig = make_subplots(specs=[[{"secondary_y": True}]])
+                fig.add_trace(
+                    go.Bar(
+                        x=join_df.index,
+                        y=regimes,
+                        name="Regime",
+                        opacity=0.25,
+                    ),
+                    secondary_y=True,
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=join_df.index,
+                        y=join_df[selected_ins],
+                        name=f"{selected_ins}",
+                    ),
+                    secondary_y=False,
+                )
+
+                fig.update_layout(
+                    title_text="Regime Probabilities",
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            with col9:
+                st.write("Regime Statistics")
+                st.dataframe(regstats, use_container_width=True)
