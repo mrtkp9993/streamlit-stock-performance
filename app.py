@@ -234,6 +234,42 @@ if st.button("Run Analysis"):
                 join_df_change[selected_ins][1:][regimes == 2].quantile(0.05),
             ]
 
+            # Monte Carlo Simulation
+            S_0 = df.loc[df.index[-1]]
+            N_SIM = 20000
+            mu = join_df_change[selected_ins].mean()
+            sigma = join_df_change[selected_ins].std()
+
+            def simulate_gbm(s_0, mu, sigma, n_sims, T, N):
+                dt = T / N
+                dW = np.random.normal(scale=np.sqrt(dt), size=(n_sims, N))
+                W = np.cumsum(dW, axis=1)
+
+                time_step = np.linspace(dt, T, N)
+                time_steps = np.broadcast_to(time_step, (n_sims, N))
+
+                S_t = s_0 * np.exp((mu - 0.5 * sigma**2) * time_steps + sigma * W)
+                S_t = np.insert(S_t, 0, s_0, axis=1)
+
+                return S_t
+
+            gbm_simulations = simulate_gbm(S_0, mu, sigma, N_SIM, 10, 10)
+            sim_df = pd.DataFrame(np.transpose(gbm_simulations))
+
+            ressim = pd.concat(
+                [sim_df.mean(axis=1), sim_df.min(axis=1), sim_df.max(axis=1)], axis=1
+            )
+            ressim.index = pd.date_range(start=df.index[-1], periods=11)
+            ressim.columns = ["Simulation Mean", "Simulation Min", "Simulation Max"]
+            ressim = pd.concat([df[-15:], ressim.iloc[1:, :]])
+            ressim.iloc[14, :] = [S_0, S_0, S_0, S_0]
+            ressim.columns = [
+                "Historical Price",
+                "Simulation Mean",
+                "Simulation Min",
+                "Simulation Max",
+            ]
+
             error = 0
         except Exception as e:
             error = 1
@@ -299,6 +335,43 @@ if st.button("Run Analysis"):
             with col7:
                 st.write("Return Statistics")
                 st.dataframe(stat_table, use_container_width=True)
+
+        with st.expander("Monte Carlo Simulation"):
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=ressim.index,
+                    y=ressim["Historical Price"],
+                    name="Historical Price",
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=ressim.index,
+                    y=ressim["Simulation Mean"],
+                    name="Simulation Mean",
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=ressim.index,
+                    y=ressim["Simulation Min"],
+                    name="Simulation Min",
+                    fill="tonexty",
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=ressim.index,
+                    y=ressim["Simulation Max"],
+                    name="Simulation Max",
+                    fill="tonexty",
+                )
+            )
+            fig.update_layout(
+                title_text="Monte Carlo Simulation (10 Days)",
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
         with st.expander("Regime Switching"):
             col8, col9 = st.columns(2)
