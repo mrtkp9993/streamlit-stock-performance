@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 import plotly.express as px
-import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import streamlit as st
 import yfinance as yf
@@ -9,6 +8,7 @@ from plotly.subplots import make_subplots
 from statsmodels.tsa.regime_switching.markov_autoregression import MarkovAutoregression
 
 from inst_list import inst_list
+from utils import gasmodel
 
 st.set_page_config(
     layout="wide",
@@ -270,6 +270,9 @@ if st.button("Run Analysis"):
                 "Simulation Max",
             ]
 
+            # Generalized Autoregressive Score
+            gasdf = gasmodel(join_df_change[selected_ins])
+
             error = 0
         except Exception as e:
             error = 1
@@ -402,3 +405,28 @@ if st.button("Run Analysis"):
             with col9:
                 st.write("Regime Statistics")
                 st.dataframe(regstats, use_container_width=True)
+
+        with st.expander("Generalized Autoregressive Score"):
+            col10, col11 = st.columns(2)
+            with col10:
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Scatter(
+                        x=gasdf.index,
+                        y=gasdf["location"],
+                        name="Location",
+                    )
+                )
+                fig.update_layout(title_text="Location")
+                st.plotly_chart(fig, use_container_width=True)
+            with col11:
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Scatter(
+                        x=gasdf.index,
+                        y=gasdf["scale"],
+                        name="Scale",
+                    )
+                )
+                fig.update_layout(title_text="Scale")
+                st.plotly_chart(fig, use_container_width=True)
