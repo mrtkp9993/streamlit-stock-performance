@@ -52,7 +52,6 @@ benchmark_instruments = {
 symbols = inst_list
 
 
-@st.cache_data
 def download_benchmark_data():
     benchmark_data = yf.download(list(benchmark_instruments.keys()), period="2y")
     benchmark_data = benchmark_data["Close"]
